@@ -1,0 +1,92 @@
+---
+# defaults file for na_ontap_ai_aff_deploy
+
+# ONTAP cluster management hostname/IP
+netapp_hostname: "192.168.100.100"
+
+# Cluster admin login details
+netapp_username: admin
+netapp_password: password
+
+# Cluster SVM details
+cluster_svm: cluster_svm
+
+# Data SVM details
+data_svm: "data_01"
+data_svm_rootvol: "{{data_svm}}_rootvol"
+allowed_protocols: nfs
+
+# Storage VLAN details
+storage_vlans:
+  - {desc: nfs_vlan_01, id: 3111}
+
+# Broadcast domain details
+broadcast_domains:
+  nfs_vlan_01: "NFS-A"
+
+# FlexVol volumes to be created as part of deployment
+flexvols:
+  - {vname: testvol01, aggr: "n01_data01", size: "100", size_unit: gb, jpath: /testvol01}
+
+# FlexGroup Volumes to be created as part of deployment
+flexgroups:
+  - {vname: data_flexgroup_01, size: "20", size_unit: tb, jpath: /data_flexgroup_01}
+
+# New export policy details (to be created as part of deployment)
+create_new_export_policy: False
+new_export_policy_name: ontapai
+
+# Export policy rule details (to be created as part of deployment for both the default and new export policies)
+exp_rules:
+  - {clientmatch: 192.168.0.0/24, rorule: sys, rwrule: sys, superuser: sys, protocol: nfs }
+
+# Determines whether or not Harvest role and user are to be created
+create_harvest_role_user: True
+
+# Harvest role command details
+harvest_role_cmds:
+  - "version"
+  - "cluster identity show"
+  - "cluster show"
+  - "system node show"
+  - "statistics"
+  - "lun show"
+  - "network interface show"
+  - "qos workload show"
+  
+# Harvest role password
+harvest_password: "NetApp!23"
+
+# Cluster node details
+node1_name: "ontap-01"
+node2_name: "ontap-02"
+nodes:
+  - {name: "{{ node1_name }}", ifgrp1: a11a, ifgrp2: a21a, data_aggr: "n01_data01", aggr_disk_count: 47}
+  - {name: "{{ node2_name }}", ifgrp1: a12a, ifgrp2: a22a, data_aggr: "n02_data01", aggr_disk_count: 47}
+
+# Determines whether or not data aggregrates are to be created
+create_data_aggrs: True
+
+# Network ports used. These will be removed from the default broadcast domain.
+ports: "{{ node1_name }}:e3a,{{ node1_name }}:e3b,{{ node1_name }}:e5a,{{ node1_name }}:e5b,{{ node2_name }}:e3a,{{ node2_name }}:e3b,{{ node2_name }}:e5a,{{ node2_name }}:e5b"
+
+# LACP interface group details
+ifgrps:
+  - {grpname: a11a, node: "{{ node1_name }}", ports: [e3a, e5a], mtu: 9000}
+  - {grpname: a21a, node: "{{ node1_name }}", ports: [e3b, e5b], mtu: 9000}
+  - {grpname: a12a, node: "{{ node2_name }}", ports: [e3a, e5a], mtu: 9000}
+  - {grpname: a22a, node: "{{ node2_name }}", ports: [e3b, e5b], mtu: 9000}
+  
+# VLAN 3111 port details
+ports_3111: "{{ node1_name }}:a11a-3111,{{ node1_name }}:a21a-3111,{{ node2_name }}:a12a-3111,{{ node2_name }}:a22a-3111"
+
+# Data interface/LIF details
+interfaces:
+  - {iname: "data01-n01-a", homeport: a11a-3111, homenode: "{{ node1_name }}", address: 192.168.0.101, netmask: 255.255.255.0}
+  - {iname: "data01-n01-b", homeport: a11a-3111, homenode: "{{ node1_name }}", address: 192.168.0.102, netmask: 255.255.255.0}
+  - {iname: "data01-n01-c", homeport: a21a-3111, homenode: "{{ node1_name }}", address: 192.168.0.103, netmask: 255.255.255.0}
+  - {iname: "data01-n01-d", homeport: a21a-3111, homenode: "{{ node1_name }}", address: 192.168.0.104, netmask: 255.255.255.0}
+  - {iname: "data01-n02-a", homeport: a12a-3111, homenode: "{{ node2_name }}", address: 192.168.0.105, netmask: 255.255.255.0}
+  - {iname: "data01-n02-b", homeport: a12a-3111, homenode: "{{ node2_name }}", address: 192.168.0.106, netmask: 255.255.255.0}
+  - {iname: "data01-n02-c", homeport: a22a-3111, homenode: "{{ node2_name }}", address: 192.168.0.107, netmask: 255.255.255.0}
+  - {iname: "data01-n02-d", homeport: a22a-3111, homenode: "{{ node2_name }}", address: 192.168.0.108, netmask: 255.255.255.0}

@@ -1,0 +1,249 @@
+---
+# tasks file for na_ontap_ai_aff_deploy
+
+- name: Remove ports from default broadcast domain
+  na_ontap_broadcast_domain_ports:
+    state: absent
+    hostname: "{{ netapp_hostname }}"
+    username: "{{ netapp_username }}"
+    password: "{{ netapp_password }}"
+    broadcast_domain: "Default"
+    ports: "{{ ports }}"
+  tags: ontap_broadcast_domain_ports
+
+- name: Create data aggregates
+  na_ontap_aggregate:
+    state: present
+    service_state: online
+    name: "{{ item.data_aggr }}"
+    disk_count: "{{ item.aggr_disk_count }}"
+    wait_for_online: True
+    time_out: 300
+    hostname: "{{ netapp_hostname }}"
+    username: "{{ netapp_username }}"
+    password: "{{ netapp_password }}"
+  with_items:
+    - "{{ nodes }}"
+  when: create_data_aggrs == True
+  tags: ontap_aggregate
+
+- name: Create LACP interface groups
+  na_ontap_net_ifgrp:
+    hostname: "{{ netapp_hostname }}"
+    username: "{{ netapp_username }}"
+    password: "{{ netapp_password }}"
+    state: present
+    distribution_function: port
+    mode: multimode_lacp
+    name: "{{ item.grpname }}"
+    node: "{{ item.node }}"
+    ports: "{{ item.ports }}"
+  with_items:
+    - "{{ ifgrps }}" 
+  tags: ontap_ifgrp
+
+- name: Set MTU on ifgrps
+  na_ontap_net_port:
+    hostname: "{{ netapp_hostname }}"
+    username: "{{ netapp_username }}"
+    password: "{{ netapp_password }}"
+    state: present
+    mtu: "{{ item.mtu }}"
+    node: "{{ item.node }}"
+    port: "{{ item.grpname }}"
+  with_items:
+    - "{{ ifgrps }}"
+  tags: ontap_ifgrp_mtu
+
+- name: Create storage VLANs on ifgrp1
+  na_ontap_net_vlan:
+    hostname: "{{ netapp_hostname }}"
+    username: "{{ netapp_username }}"
+    password: "{{ netapp_password }}"
+    vlanid: "{{ item[0].id }}"
+    node: "{{ item[1].name }}"
+    parent_interface: "{{ item[1].ifgrp1 }}"
+  with_nested:
+    - "{{ storage_vlans }}"
+    - "{{ nodes }}"
+  tags: ontap_vlans
+
+- name: Create storage VLANs on ifgrp2
+  na_ontap_net_vlan:
+    hostname: "{{ netapp_hostname }}"
+    username: "{{ netapp_username }}"
+    password: "{{ netapp_password }}"
+    vlanid: "{{ item[0].id }}"
+    node: "{{ item[1].name }}"
+    parent_interface: "{{ item[1].ifgrp2 }}"
+  with_nested:
+    - "{{ storage_vlans }}"
+    - "{{ nodes }}"
+  tags: ontap_vlans
+
+- name: create nfs_vlan_01 broadcast domain
+  na_ontap_broadcast_domain:
+    state: present
+    hostname: "{{ netapp_hostname }}"
+    username: "{{ netapp_username }}"
+    password: "{{ netapp_password }}"
+    broadcast_domain: "{{ broadcast_domains['nfs_vlan_01'] }}"
+    mtu: "9000"
+    ipspace: Default
+    ports: "{{ ports_3111 }}"
+  tags: ontap_broadcast_domain
+
+- name: Create data SVM with NFS protocol
+  na_ontap_svm:
+    hostname: "{{ netapp_hostname }}"
+    username: "{{ netapp_username }}"
+    password: "{{ netapp_password }}"
+    state: present
+    name: "{{ data_svm }}"
+    root_volume: "{{ data_svm_rootvol }}"
+    root_volume_aggregate: "{{ nodes[0].data_aggr }}"
+    root_volume_security_style: "unix"
+    allowed_protocols: "{{ allowed_protocols }}"
+    aggr_list: "{{ nodes[0].data_aggr }},{{ nodes[1].data_aggr }}"
+  tags: ontap_svm
+
+- name: change nfs status
+  na_ontap_nfs:
+    hostname: "{{ netapp_hostname }}"
+    username: "{{ netapp_username }}"
+    password: "{{ netapp_password }}"
+    state: present
+    service_state: started
+    vserver: "{{ data_svm }}"
+    nfsv3: enabled
+    tcp: enabled
+    tcp_max_xfer_size: 262144
+    udp: enabled
+  tags: 
+    - ontap_nfs
+    - test_svm
+
+- name: set v3-64bit-identifiers for large FlexGroup support
+  na_ontap_command:
+    hostname: "{{ netapp_hostname }}"
+    username: "{{ netapp_username }}"
+    password: "{{ netapp_password }}"
+    command: "set adv; nfs modify -vserver {{ data_svm }} -v3-64bit-identifiers enabled"
+  tags: 
+    - ontap_nfs
+    - test_svm
+
+- name: Create export policy rules for default export policy
+  na_ontap_export_policy_rule:
+    hostname: "{{ netapp_hostname }}"
+    username: "{{ netapp_username }}"
+    password: "{{ netapp_password }}"
+    state: present
+    vserver: "{{ data_svm }}"
+    policy_name: default
+    client_match: "{{ item.clientmatch }}"
+    ro_rule: "{{ item.rorule }}"
+    rw_rule: "{{ item.rwrule }}"
+    protocol: "{{ item.protocol }}"
+    super_user_security: "{{ item.superuser }}"
+  with_items:
+    - "{{ exp_rules }}"
+  tags: 
+    - ontap_export_policy_rules
+    - test_svm
+
+- name: Create data LIFs
+  na_ontap_interface:
+    hostname: "{{ netapp_hostname }}"
+    username: "{{ netapp_username }}"
+    password: "{{ netapp_password }}"
+    state: present
+    vserver: "{{ data_svm }}"
+    interface_name: "{{ item.iname }}"
+    home_port: "{{ item.homeport }}"
+    home_node: "{{ item.homenode }}"
+    address: "{{ item.address }}"
+    netmask: "{{ item.netmask }}"
+    role: data
+    protocols: nfs
+  with_items:
+    - "{{ interfaces }}" 
+  tags: ontap_data_lifs
+
+- name: Create FlexVol data volumes
+  na_ontap_volume:
+    hostname: "{{ netapp_hostname }}"
+    username: "{{ netapp_username }}"
+    password: "{{ netapp_password }}"
+    state: present
+    name: "{{ item.vname }}"
+    size: "{{ item.size }}"
+    size_unit: "{{ item.size_unit }}"
+    vserver: "{{ data_svm }}"
+    aggregate_name: "{{ item.aggr }}"
+    junction_path: "{{ item.jpath }}"
+#    policy: "{{ new_export_policy_name }}"
+  with_items:
+    - "{{ flexvols }}"
+  tags: ontap_vol
+
+- name: Create FlexGroup data volumes
+  na_ontap_volume:
+    hostname: "{{ netapp_hostname }}"
+    username: "{{ netapp_username }}"
+    password: "{{ netapp_password }}"
+    state: present
+    name: "{{ item.vname }}"
+    auto_provision_as: flexgroup
+    size: "{{ item.size }}"
+    size_unit: "{{ item.size_unit }}"
+    vserver: "{{ data_svm }}"
+    junction_path: "{{ item.jpath }}"
+#    policy: "{{ new_export_policy_name }}"
+  with_items:
+    - "{{ flexgroups }}"
+  when: ansible_version.full is version('2.8.0', '>=')
+  tags: ontap_flexgroup
+
+- name: create FlexGroup volumes using CLI command
+  na_ontap_command:
+    hostname: "{{ netapp_hostname }}"
+    username: "{{ netapp_username }}"
+    password: "{{ netapp_password }}"
+    command: "set -conf off; flexgroup deploy -vserver {{ data_svm }} -volume {{ item.vname }} -size {{ item.size }}{{ item.size_unit }}"
+  with_items:
+    - "{{ flexgroups }}"
+  when: ansible_version.full is version('2.8.0', '<')
+  tags: ontap_flexgroup
+
+# Tasks to add harvest user role and account
+
+- name: Create Harvest user role
+  na_ontap_user_role:
+    hostname: "{{ netapp_hostname }}"
+    username: "{{ netapp_username }}"
+    password: "{{ netapp_password }}"
+    state: present
+    name: harvest_role
+    vserver: "{{ cluster_svm }}"
+    access_level: readonly
+    command_directory_name: "{{ item }}"
+  with_items:
+   - "{{ harvest_role_cmds }}"
+  when: create_harvest_role_user == True
+  tags: harvest_role
+
+- name: Create Harvest user
+  na_ontap_user:
+    hostname: "{{ netapp_hostname }}"
+    username: "{{ netapp_username }}"
+    password: "{{ netapp_password }}"
+    state: present
+    name: harvest
+    vserver: "{{ cluster_svm }}"
+    role_name: harvest_role
+    application: ontapi
+    authentication_method: password
+    set_password: "{{ harvest_password }}"
+  when: create_harvest_role_user == True
+  tags: harvest_user
