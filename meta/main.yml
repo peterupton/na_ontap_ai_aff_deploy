@@ -2,7 +2,7 @@ galaxy_info:
   author: "David Arnette, Michael Oglesby"
   description: "This role can be used to deploy/provision a new NetApp AFF/FAS cluster as part of an ONTAP AI converged infrastructure pod."
   company: "NetApp"
-  license: BSD
+  license: "GPL-2.0-or-later"
   min_ansible_version: 2.9
   galaxy_tags: [netapp, ontap, ontapai, ai, aff, fas]
 collections:
