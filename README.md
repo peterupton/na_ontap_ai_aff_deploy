@@ -9,7 +9,7 @@ Requirements
 **Prerequesites:**
 
 1. This role assumes the storage system is an AFF A800 with X1146 or X1148 network cards in slots 3 and 5 in each controller (2x cards/controller). 
-2. Storage system nodes should be cabled as specified in [NVA-1151](https://www.netapp.com/us/media/nva-1151-deploy.pdf). 
+2. Storage system nodes should be cabled as specified in [NVA-1151](https://www.netapp.com/pdf.html?item=/media/20708-nva-1151-deploy.pdf). 
 3. Initial cluster setup/creation must have already been completed.
 
 If the hardware configuration is differen than above the disk and/or network port configuration variables must be modified. 
@@ -17,7 +17,7 @@ If the hardware configuration is differen than above the disk and/or network por
 Role Variables
 --------------
 
-By default, this role accommodates an AFF A800 cluster containing two nodes, identified as 'ontap-01' and 'ontap-02', and creates the storage configuration defined in [NVA-1151](https://www.netapp.com/us/media/nva-1151-deploy.pdf).
+By default, this role accommodates an AFF A800 cluster containing two nodes, identified as 'ontap-01' and 'ontap-02', and creates the storage configuration defined in [NVA-1151](https://www.netapp.com/pdf.html?item=/media/20708-nva-1151-deploy.pdf).
 To override the default values, create a new variables file using the example below as a template and include it in the playbook used to execute this role. An example of this is shown
 in the Example Playbook section below.
 
